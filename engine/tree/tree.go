@@ -7,22 +7,15 @@ import (
 
 // 我们还对键和值的大小添加了一些约束条件。所以单KV对的大小总是适合一页。如果您需要支持更大的键或更大的值，您必须为它们分配额外的页面，这就增加了复杂性
 const (
-	BNODE_NODE = 1 // 内部节点，没有值
-	BNODE_LEAF = 2 // 叶节点的值
-
 	HEADER             = 4
-	BTREE_PAGE_SIZE    = 4096
+	BTREE_PAGE_SIZE    = 4096 // 4096 byte
 	BTREE_MAX_KEY_SIZE = 1000
 	BTREE_MAX_VAL_SIZE = 3000
 )
 
-type BNode struct {
-	data []byte // 数据,可以被转储到磁盘上
-}
-
 // BTree
 // 我们不能使用内存内的指针，这些指针是引用磁盘页的64位整数，而不是内存内的节点
-// 页大小被定义为4K字节。更大的页大小，如8K或16K也可以使用
+// 页大小被定义为4K字节(4K bytes,)。更大的页大小，如8K或16K也可以使用
 type BTree struct {
 	// 指针（非零页码）
 	root uint64
@@ -30,91 +23,6 @@ type BTree struct {
 	get func(uint64) BNode // 引用指针
 	new func(BNode) uint64 // 分配一个新的页
 	del func(uint64)       // 释放一个页
-}
-
-func init() {
-	node1max := HEADER + 8 + 2 + 4 + BTREE_MAX_KEY_SIZE + BTREE_MAX_VAL_SIZE
-	assert(node1max <= BTREE_PAGE_SIZE)
-}
-
-func assert(exp bool) {
-	if !exp {
-		panic("assert panic")
-	}
-}
-
-// header,
-// BNODE_NODE = 1 // 内部节点，没有值
-// BNODE_LEAF = 2 // 叶节点, 有值
-func (node BNode) btype() uint16 {
-	return binary.LittleEndian.Uint16(node.data)
-}
-
-// data的第二第三子节为key的长度
-func (node BNode) nkeys() uint16 {
-	return binary.LittleEndian.Uint16(node.data[2:4])
-}
-
-// 设置header，header占4字节（0-3），data的第一第二字节为node type，第二第三子节为key的长度
-func (node BNode) setHeader(btype uint16, nkeys uint16) {
-	binary.LittleEndian.PutUint16(node.data[0:2], btype)
-	binary.LittleEndian.PutUint16(node.data[2:4], nkeys)
-}
-
-// pointers
-func (node BNode) getPtr(idx uint16) uint64 {
-	assert(idx < node.nkeys())
-	pos := HEADER + 8*idx
-	return binary.LittleEndian.Uint64(node.data[pos:])
-}
-
-func (node BNode) setPtr(idx uint16, val uint64) {
-	assert(idx < node.nkeys())
-	pos := HEADER + 8*idx
-	binary.LittleEndian.PutUint64(node.data[pos:], val)
-}
-
-// offset list
-func offsetPos(node BNode, idx uint16) uint16 {
-	assert(1 <= idx && idx <= node.nkeys())
-	return HEADER + 8*node.nkeys() + 2*(idx-1)
-}
-
-func (node BNode) getOffset(idx uint16) uint16 {
-	if idx == 0 {
-		return 0
-	}
-	return binary.LittleEndian.Uint16(node.data[offsetPos(node, idx):])
-}
-
-func (node BNode) setOffset(idx uint16, offset uint16) {
-	binary.LittleEndian.PutUint16(node.data[offsetPos(node, idx):], offset)
-}
-
-// key-values
-func (node BNode) kvPos(idx uint16) uint16 {
-	assert(idx <= node.nkeys())
-	return HEADER + 8*node.nkeys() + 2*node.nkeys() + node.getOffset(idx)
-}
-
-func (node BNode) getKey(idx uint16) []byte {
-	assert(idx < node.nkeys())
-	pos := node.kvPos(idx)
-	klen := binary.LittleEndian.Uint16(node.data[pos:])
-	return node.data[pos+4:][:klen]
-}
-
-func (node BNode) getVal(idx uint16) []byte {
-	assert(idx < node.nkeys())
-	pos := node.kvPos(idx)
-	klen := binary.LittleEndian.Uint16(node.data[pos+0:])
-	vlen := binary.LittleEndian.Uint16(node.data[pos+2:])
-	return node.data[pos+4+klen:][:vlen]
-}
-
-// 节点的大小，以字节为单位
-func (node BNode) nbytes() uint16 {
-	return node.kvPos(node.nkeys())
 }
 
 // 返回其范围与该键相交的第一个子节点. (kid[i] <= key)

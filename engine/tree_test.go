@@ -1,6 +1,9 @@
 package engine
 
-import "unsafe"
+import (
+	"testing"
+	"unsafe"
+)
 
 type C struct {
 	tree  BTree
@@ -43,4 +46,10 @@ func (c *C) add(key string, val string) {
 func (c *C) del(key string) bool {
 	delete(c.ref, key)
 	return c.tree.Delete([]byte(key))
+}
+
+func TestAdd(t *testing.T) {
+	c := newC()
+	c.add("a", "1")
+
 }
